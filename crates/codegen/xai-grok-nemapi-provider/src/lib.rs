@@ -50,6 +50,7 @@
 pub mod client;
 pub mod config;
 pub mod error;
+pub mod models;
 pub mod parser;
 pub mod provider;
 pub mod sampler_adapter;
@@ -58,6 +59,7 @@ pub mod sampler_adapter;
 pub use client::NemApiClient;
 pub use config::NemApiConfig;
 pub use error::NemApiError;
+pub use models::{get_models_for_slash_command, get_nemapi_models_for_selection, is_canonical_nemapi_model, get_default_nemapi_model};
 pub use parser::NemApiResponseParser;
 pub use provider::NemApiProvider;
 pub use sampler_adapter::{
@@ -71,9 +73,10 @@ pub const DEFAULT_NEMAPI_BASE_URL: &str = "http://127.0.0.1:8090/v1";
 pub const NEMAPI_TOKEN_PREFIX: &str = "nemapi-token";
 
 /// Provider names supported by NemApi
+/// Each provider has exactly ONE canonical model name (the -chat suffix)
 pub const NEMAPI_PROVIDERS: &[&str] = &[
     "deepseek",
-    "qwen",
+    "qwen", 
     "claude",
     "gemini",
     "chatgpt",
@@ -81,40 +84,37 @@ pub const NEMAPI_PROVIDERS: &[&str] = &[
     "zai",
 ];
 
-/// Model aliases for NemApi providers
-pub const NEMAPI_MODEL_ALIASES: &[&str] = &[
-    // DeepSeek
+/// Canonical model names for NemApi providers
+/// These are the ONLY 7 model names that should be used - no fictional names
+/// Each provider has exactly one canonical model with -chat suffix
+pub const NEMAPI_CANONICAL_MODELS: &[&str] = &[
     "deepseek-chat",
-    "deepseek-coder",
-    "deepseek-v3",
-    "deepseek-r1",
-    // Qwen
     "qwen-chat",
-    "qwen-plus",
-    "qwen2.5-plus",
-    "qwen3-coder-plus",
-    // Claude
     "claude-chat",
-    "claude-sonnet",
-    "claude-3-sonnet",
-    "claude-3-haiku",
-    // Gemini
     "gemini-chat",
-    "gemini-2.5-flash",
-    "gemini-pro",
-    // ChatGPT
     "gpt-chat",
-    "gpt-4",
-    "gpt-4o",
-    "gpt-5",
-    // Kimi
     "kimi-chat",
-    "kimi-k2",
-    "kimi-k3",
-    // Z.ai / GLM
     "glm-chat",
-    "glm-4",
-    "glm-5",
+];
+
+/// Model aliases for NemApi providers (for backward compatibility only)
+/// These aliases map to the canonical models above
+/// When using / command to select models, ONLY the 7 canonical models should be shown
+pub const NEMAPI_MODEL_ALIASES: &[&str] = &[
+    // DeepSeek aliases
+    "deepseek-coder", "deepseek-v3", "deepseek-r1",
+    // Qwen aliases
+    "qwen-plus", "qwen2.5-plus", "qwen3-coder-plus", "qwen-max",
+    // Claude aliases
+    "claude-sonnet", "claude-3-sonnet", "claude-3-haiku",
+    // Gemini aliases
+    "gemini-2.5-flash", "gemini-2.0-flash", "gemini-pro", "gemini-flash", "flash",
+    // ChatGPT aliases
+    "gpt-4", "gpt-4o", "gpt-4.1", "gpt-5", "gpt-3.5-turbo", "o1", "o3",
+    // Kimi aliases
+    "kimi-k2", "kimi-k3", "moonshot",
+    // Z.ai / GLM aliases
+    "glm-4", "glm-5", "zai-chat", "zai", "z.ai", "chatglm",
 ];
 
 /// Create a NemApi sampling client with gemini-chat as default for testing

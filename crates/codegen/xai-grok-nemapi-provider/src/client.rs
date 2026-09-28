@@ -181,9 +181,12 @@ impl NemApiClient {
 
     /// Send a chat completion request
     ///
-    /// IMPORTANT: NemApi manages context server-side via browser extension.
-    /// - First request: includes system prompt + tools
-    /// - Subsequent requests: ONLY the new user message
+    /// IMPORTANT: NemApi manages context SERVER-SIDE via browser extension.
+    /// - First request in NEW conversation: sends system prompt + ALL messages + tools + user message in ONE request
+    /// - Subsequent requests in SAME conversation: sends ONLY the new user message
+    /// - Context is maintained by the browser extension, NOT sent back each time
+    /// - For resuming a conversation: use /resume command to select session, then continue normally
+    /// - Session history is displayed but NOT sent back to API - only user prompt is sent
     pub async fn send_chat_completion(
         &self,
         mut request: ChatCompletionRequest,
@@ -208,11 +211,14 @@ impl NemApiClient {
         // Update request model with canonical model
         request.model = Some(canonical_model.clone());
 
-        // Check if this is the first request
-        let is_first = self.is_first_request().await;
+        // Check if this is the first request in the conversation
+        let is_first_request = self.is_first_request().await;
 
-        // Build the request body according to NemApi's method
-        let body = self.build_nemapi_body(&request, is_first, &provider_id, &canonical_model)?;
+        // Build the request body according to NemApi's method:
+        // - First request: sends EVERYTHING (system + all messages + tools + user message) in ONE request
+        // - Subsequent requests: sends ONLY the latest user message
+        // The browser extension maintains the context server-side
+        let body = self.build_nemapi_body(&request, is_first_request, &provider_id, &canonical_model)?;
 
         // Send the request
         let response = self
@@ -225,12 +231,14 @@ impl NemApiClient {
                 e
             })?;
 
-        // Mark first request as done
-        if is_first {
+        // Mark first request as done (subsequent requests will send only user message)
+        // Note: Server maintains context, session history is displayed but NOT sent back
+        if is_first_request {
             self.mark_first_request_done().await;
         }
 
         // Parse the response
+        // Note: Server maintains context, so we don't need to send history back
         self.parse_chat_completion_response(response, &request_id, &provider_id)
             .await
     }

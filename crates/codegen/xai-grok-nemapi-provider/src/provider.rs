@@ -103,75 +103,75 @@ impl NemApiProvider {
     }
 
     /// Initialize default providers
+    /// Each provider has EXACTLY ONE canonical model (with -chat suffix)
+    /// When using / command to select models, ONLY these 7 canonical models should be shown
     fn initialize_default_providers(&mut self) {
-        // DeepSeek
+        // DeepSeek - ONLY canonical model: deepseek-chat
         self.add_provider(NemApiProviderInfo {
             id: "deepseek".to_string(),
             display_name: "DeepSeek".to_string(),
             canonical_model: "deepseek-chat".to_string(),
+            // ONLY the canonical model in the models list
             models: vec![
                 "deepseek-chat".to_string(),
+            ],
+            // Aliases for backward compatibility (not shown in / command)
+            aliases: vec![
                 "deepseek-coder".to_string(),
                 "deepseek-v3".to_string(),
                 "deepseek-r1".to_string(),
-            ],
-            aliases: vec![
-                "chat".to_string(),
             ],
             enabled: true,
             config: ProviderSpecificConfig::default(),
         });
 
-        // Qwen
+        // Qwen - ONLY canonical model: qwen-chat
         self.add_provider(NemApiProviderInfo {
             id: "qwen".to_string(),
             display_name: "Qwen".to_string(),
             canonical_model: "qwen-chat".to_string(),
             models: vec![
                 "qwen-chat".to_string(),
+            ],
+            aliases: vec![
                 "qwen-plus".to_string(),
                 "qwen2.5-plus".to_string(),
                 "qwen3-coder-plus".to_string(),
-            ],
-            aliases: vec![
                 "qwen-max".to_string(),
-                "plus".to_string(),
             ],
             enabled: true,
             config: ProviderSpecificConfig::default(),
         });
 
-        // Claude
+        // Claude - ONLY canonical model: claude-chat
         self.add_provider(NemApiProviderInfo {
             id: "claude".to_string(),
             display_name: "Claude".to_string(),
             canonical_model: "claude-chat".to_string(),
             models: vec![
                 "claude-chat".to_string(),
+            ],
+            aliases: vec![
                 "claude-sonnet".to_string(),
                 "claude-3-sonnet".to_string(),
                 "claude-3-haiku".to_string(),
-            ],
-            aliases: vec![
-                "sonnet".to_string(),
-                "haiku".to_string(),
             ],
             enabled: true,
             config: ProviderSpecificConfig::default(),
         });
 
-        // Gemini - DEFAULT PROVIDER
+        // Gemini - DEFAULT PROVIDER - ONLY canonical model: gemini-chat
         self.add_provider(NemApiProviderInfo {
             id: "gemini".to_string(),
             display_name: "Gemini".to_string(),
             canonical_model: "gemini-chat".to_string(),
             models: vec![
                 "gemini-chat".to_string(),
+            ],
+            aliases: vec![
                 "gemini-2.5-flash".to_string(),
                 "gemini-2.0-flash".to_string(),
                 "gemini-pro".to_string(),
-            ],
-            aliases: vec![
                 "gemini-flash".to_string(),
                 "flash".to_string(),
             ],
@@ -179,19 +179,19 @@ impl NemApiProvider {
             config: ProviderSpecificConfig::default(),
         });
 
-        // ChatGPT
+        // ChatGPT - ONLY canonical model: gpt-chat
         self.add_provider(NemApiProviderInfo {
             id: "chatgpt".to_string(),
             display_name: "ChatGPT".to_string(),
             canonical_model: "gpt-chat".to_string(),
             models: vec![
                 "gpt-chat".to_string(),
+            ],
+            aliases: vec![
                 "gpt-4".to_string(),
                 "gpt-4o".to_string(),
                 "gpt-4.1".to_string(),
                 "gpt-5".to_string(),
-            ],
-            aliases: vec![
                 "gpt-3.5-turbo".to_string(),
                 "o1".to_string(),
                 "o3".to_string(),
@@ -200,17 +200,17 @@ impl NemApiProvider {
             config: ProviderSpecificConfig::default(),
         });
 
-        // Kimi
+        // Kimi - ONLY canonical model: kimi-chat
         self.add_provider(NemApiProviderInfo {
             id: "kimi".to_string(),
             display_name: "Kimi".to_string(),
             canonical_model: "kimi-chat".to_string(),
             models: vec![
                 "kimi-chat".to_string(),
-                "kimi-k2".to_string(),
-                "kimi-k3".to_string(),
             ],
             aliases: vec![
+                "kimi-k2".to_string(),
+                "kimi-k3".to_string(),
                 "kimi".to_string(),
                 "moonshot".to_string(),
             ],
@@ -218,17 +218,17 @@ impl NemApiProvider {
             config: ProviderSpecificConfig::default(),
         });
 
-        // Z.ai / GLM
+        // Z.ai / GLM - ONLY canonical model: glm-chat
         self.add_provider(NemApiProviderInfo {
             id: "zai".to_string(),
             display_name: "Z.ai / GLM".to_string(),
             canonical_model: "glm-chat".to_string(),
             models: vec![
                 "glm-chat".to_string(),
-                "glm-4".to_string(),
-                "glm-5".to_string(),
             ],
             aliases: vec![
+                "glm-4".to_string(),
+                "glm-5".to_string(),
                 "zai-chat".to_string(),
                 "zai".to_string(),
                 "z.ai".to_string(),
