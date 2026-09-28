@@ -1,0 +1,16 @@
+[models]
+default = "gemini-chat"
+web_search = "gemini-chat"
+
+[endpoints]
+# Use NemApi as the proxy
+cli_chat_proxy_base_url = "http://127.0.0.1:8090/v1"
+xai_api_base_url = "http://127.0.0.1:8090/v1"
+models_base_url = "http://127.0.0.1:8090/v1"
+
+[features]
+telemetry = false
+feedback = false
+
+[auth]
+# No authentication needed for local NemApi

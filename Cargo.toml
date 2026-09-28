@@ -46,6 +46,7 @@ members = [
     "crates/codegen/xai-grok-memory",
     "crates/codegen/xai-grok-mermaid",
     "crates/codegen/xai-grok-models",
+    "crates/codegen/xai-grok-nemapi-provider",
     "crates/codegen/xai-grok-otel",
     "crates/codegen/xai-grok-pager",
     "crates/codegen/xai-grok-pager-bin",
@@ -348,6 +349,7 @@ xai-grok-mcp = { path = "crates/codegen/xai-grok-mcp" }
 xai-grok-memory = { path = "crates/codegen/xai-grok-memory" }
 xai-grok-mermaid = { path = "crates/codegen/xai-grok-mermaid" }
 xai-grok-models = { path = "crates/codegen/xai-grok-models" }
+xai-grok-nemapi-provider = { path = "crates/codegen/xai-grok-nemapi-provider" }
 xai-grok-otel = { path = "crates/codegen/xai-grok-otel" }
 xai-grok-sampler = { path = "crates/codegen/xai-grok-sampler" }
 xai-grok-secrets = { path = "crates/codegen/xai-grok-secrets" }
