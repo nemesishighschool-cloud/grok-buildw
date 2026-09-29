@@ -8,20 +8,10 @@
 │                    Grok Build (Client)                         │
 ├─────────────────────────────────────────────────────────────┤
 │  ┌─────────────────────────────────────────────────────────┐  │
-│  │  xai-grok-nemapi-provider (NOUVEAU)                      │  │
-│  │  ├─ NemApiClient          - Client HTTP vers NemApi      │  │
-│  │  ├─ NemApiSamplingClient  - Adaptateur pour le sampler    │  │
-│  │  ├─ NemApiProvider        - Gestion des fournisseurs      │  │
-│  │  ├─ NemApiResponseParser  - Parseur des réponses           │  │
-│  │  └─ NemApiConfig          - Configuration                 │  │
-│  └─────────────────────────────────────────────────────────┘  │
-│                           │                                  │
-│                           ▼                                  │
-│  ┌─────────────────────────────────────────────────────────┐  │
-│  │  xai-grok-sampler (MODIFIÉ)                               │  │
-│  │  ├─ SamplingClient        - Utilise NemApiClient          │  │
-│  │  ├─ SamplerConfig         - Configuration mise à jour      │  │
-│  │  └─ ...                                                 │  │
+│  │  xai-grok-sampler (NemApi mode for canonical models)      │  │
+│  │  ├─ Nouveau fil : prompt système + outils + message user  │  │
+│  │  ├─ Suite/reprise : uniquement le dernier message user    │  │
+│  │  └─ fresh_chat=true uniquement pour un nouveau fil       │  │
 │  └─────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
                            │
@@ -46,32 +36,39 @@
 ## Méthode NemApi - Gestion de contexte
 
 ### Principe fondamental
-NemApi gère le **contexte côté serveur** via l'extension navigateur. Cela signifie :
+Le contexte conversationnel est conservé dans le fil du fournisseur piloté par
+l'extension NemApi. L'historique affiché et persisté par Grok Build n'est pas
+rejoué sur le réseau :
 
-1. **Première requête** : Envoie le prompt système + tous les messages + les outils
+1. **Premier tour d'une nouvelle discussion** : envoie le prompt système, les
+   définitions d'outils et le message utilisateur courant en une requête.
+   `fresh_chat=true` demande à NemApi de démarrer un nouveau fil.
    ```json
    {
      "model": "gemini-chat",
      "messages": [
        {"role": "system", "content": "..."},
-       {"role": "user", "content": "..."},
-       {"role": "assistant", "content": "..."}
+       {"role": "user", "content": "..."}
      ],
      "tools": [...],
      "stream": true,
-     "provider": "gemini"
+     "provider": "gemini",
+     "fresh_chat": true
    }
    ```
 
-2. **Requêtes suivantes** : Envoie **UNIQUEMENT** le dernier message utilisateur
+2. **Tours suivants et reprise avec `/resume`** : l'historique local reste
+   visible, mais seule la nouvelle saisie utilisateur est envoyée.
+   `fresh_chat=false` conserve le fil NemApi courant.
    ```json
    {
      "model": "gemini-chat",
      "messages": [
-       {"role": "user", "content": "nouveau message"}
+       {"role": "user", "content": "message à envoyer"}
      ],
      "stream": true,
-     "provider": "gemini"
+     "provider": "gemini",
+     "fresh_chat": false
    }
    ```
 
@@ -85,10 +82,7 @@ NemApi gère le **contexte côté serveur** via l'extension navigateur. Cela sig
 
 ### Variables d'environnement
 ```bash
-# Désactive l'API xAI officielle
-export GROK_XAI_API_BASE_URL="http://127.0.0.1:8090/v1"
-
-# Active NemApi
+# Endpoint NemApi (valeur par défaut)
 export GROK_NEMAPI_BASE_URL="http://127.0.0.1:8090/v1"
 
 # Modèle par défaut
@@ -98,49 +92,34 @@ export GROK_DEFAULT_MODEL="gemini-chat"
 ### Configuration TOML
 ```toml
 [endpoints]
-xai_api_base_url = "http://127.0.0.1:8090/v1"
 nemapi_base_url = "http://127.0.0.1:8090/v1"
 
-[model]
+[models]
 default = "gemini-chat"
-
-[nemapi]
-default_provider = "gemini"
-default_model = "gemini-chat"
-stream_enabled = true
-fresh_chat = true
-premium_md = true
 ```
 
-## Fournisseurs supportés
+## Modèles affichés par `/model`
 
-| Fournisseur | Modèle par défaut | Alias |
-|-------------|------------------|-------|
-| gemini | gemini-chat | gemini-2.5-flash, gemini-pro, flash |
-| claude | claude-chat | claude-sonnet, claude-3-sonnet, sonnet |
-| qwen | qwen-chat | qwen-plus, qwen2.5-plus, plus |
-| deepseek | deepseek-chat | deepseek-coder, deepseek-v3, chat |
-| chatgpt | gpt-chat | gpt-4, gpt-4o, gpt-5, o1, o3 |
-| kimi | kimi-chat | kimi-k2, kimi-k3, moonshot |
-| zai | glm-chat | glm-4, glm-5, chatglm |
+Le sélecteur affiche uniquement les sept noms canoniques NemApi :
+
+`deepseek-chat`, `qwen-chat`, `claude-chat`, `gemini-chat`, `gpt-chat`,
+`kimi-chat`, `glm-chat`.
 
 ## Modifications apportées
 
-### 1. Module NemApi Provider
+### 1. Client NemApi autonome
 - ✅ Création de `xai-grok-nemapi-provider`
-- ✅ Client HTTP dédié avec gestion de contexte
+- ✅ Client HTTP dédié avec gestion de contexte (utilisable séparément)
 - ✅ Parseur robuste pour les imperfections NemApi
-- ✅ Adaptateur compatible avec le sampler existant
 
 ### 2. Configuration
-- ✅ Remplacement de `xai_api_base_url` par `nemapi_base_url`
-- ✅ Configuration par défaut pointant vers NemApi
-- ✅ Désactivation des autres endpoints xAI
+- ✅ Routage des sept modèles NemApi par défaut vers `nemapi_base_url`
 
 ### 3. Gestion des requêtes
-- ✅ Première requête : contexte complet
-- ✅ Requêtes suivantes : seul message utilisateur
-- ✅ Suppression des requêtes anonymes
+- ✅ Premier tour neuf : prompt système, outils et message utilisateur
+- ✅ Tours suivants / reprise : seul le nouveau message utilisateur; historique local non renvoyé
+- ✅ `fresh_chat` actif au début d'une nouvelle discussion, désactivé ensuite
+- ✅ Sélecteur limité aux sept noms canoniques
 
 ## Tests
 

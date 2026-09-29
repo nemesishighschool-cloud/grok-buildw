@@ -1236,17 +1236,19 @@ fn sampling_config_scopes_no_inline_citations_include() {
     }
 }
 #[test]
-fn default_models_dual_endpoint_routing() {
+fn default_models_route_to_nemapi_and_use_only_canonical_models() {
     let endpoints = EndpointsConfig::default();
+    let mut model_ids = Vec::new();
     for (model_id, entry) in default_model_entries(&endpoints) {
+        model_ids.push(model_id);
+        assert_eq!(entry.info().base_url, endpoints.nemapi_base_url);
         if entry.api_base_url.is_none() {
             continue;
         }
-        let session_creds = resolve_credentials(&entry, Some("tok"));
+        let session_creds = resolve_credentials(&entry, None);
         assert_eq!(
-            session_creds.base_url,
-            endpoints.proxy_url(),
-            "{model_id}: SessionToken must route to cli-chat-proxy"
+            session_creds.base_url, endpoints.nemapi_base_url,
+            "{model_id}: inference must route to NemApi"
         );
         let api_key_creds = ResolvedCredentials {
             api_key: Some("key".into()),
@@ -1258,10 +1260,22 @@ fn default_models_dual_endpoint_routing() {
             auth_scheme: AuthScheme::Bearer,
         };
         assert_eq!(
-            api_key_creds.base_url, endpoints.xai_api_base_url,
-            "{model_id}: ExternalApiKey must route to api.x.ai"
+            api_key_creds.base_url, endpoints.nemapi_base_url,
+            "{model_id}: API-key inference must route to NemApi"
         );
     }
+    assert_eq!(
+        model_ids,
+        [
+            "deepseek-chat",
+            "qwen-chat",
+            "claude-chat",
+            "gemini-chat",
+            "gpt-chat",
+            "kimi-chat",
+            "glm-chat",
+        ]
+    );
 }
 #[test]
 fn env_keys_deser_string_or_array() {
@@ -3258,16 +3272,16 @@ fn config_models_default_custom_model_is_in_resolved_model_list() {
     assert_eq!(model.info.base_url, "https://inference.example.com/v1");
 }
 #[test]
-fn e2e_default_model_with_session_routes_to_proxy() {
+fn e2e_default_model_with_session_routes_to_nemapi() {
     let (_, models) = resolve_models_from_toml("", None);
     let model = models
         .get(crate::models::default_model())
         .expect("default model should exist");
     let sampling = resolve_sampling(model, Some("session-token-123"));
-    assert_eq!(sampling.api_key.as_deref(), Some("session-token-123"));
+    let nemapi_url = EndpointsConfig::default().nemapi_base_url;
     assert_eq!(
-        sampling.base_url, "https://cli-chat-proxy.grok.com/v1",
-        "session auth should route to cli-chat-proxy, not api.x.ai"
+        sampling.base_url, nemapi_url,
+        "default NemApi models should route to the configured NemApi endpoint"
     );
 }
 #[test]
@@ -3281,8 +3295,8 @@ fn e2e_default_model_with_external_api_key_routes_to_api_xai() {
     let sampling = resolve_sampling(model, None);
     assert_eq!(sampling.api_key.as_deref(), Some("xai-external-key"));
     assert_eq!(
-        sampling.base_url, "https://api.x.ai/v1",
-        "external API key should route to api.x.ai via api_base_url"
+        sampling.base_url, "http://127.0.0.1:8090/v1",
+        "external API key should route to NemApi via api_base_url"
     );
     unsafe { std::env::remove_var("XAI_API_KEY") };
 }
@@ -3490,6 +3504,7 @@ fn e2e_enterprise_endpoints_plus_partial_model_override() {
             [endpoints]
             cli_chat_proxy_base_url = "https://enterprise-proxy.acme.com/v1"
             xai_api_base_url = "https://enterprise-api.acme.com/v1"
+            nemapi_base_url = "https://enterprise-nemapi.acme.com/v1"
 
             [model."{dm}"]
             api_key = "acme-api-key"
@@ -3499,13 +3514,13 @@ fn e2e_enterprise_endpoints_plus_partial_model_override() {
     );
     let model = models.get(dm).expect("model should exist");
     assert_eq!(
-        model.info.base_url, "https://enterprise-proxy.acme.com/v1",
-        "base_url must inherit from [endpoints], not stale default"
+        model.info.base_url, "https://enterprise-nemapi.acme.com/v1",
+        "NemApi base_url must inherit from [endpoints]"
     );
     assert_eq!(model.api_key.as_deref(), Some("acme-api-key"));
     assert_eq!(
         model.api_base_url.as_deref(),
-        Some("https://enterprise-api.acme.com/v1"),
+        Some("https://enterprise-nemapi.acme.com/v1"),
     );
     let sampling = resolve_sampling(model, Some("session-token"));
     assert_eq!(
@@ -3514,8 +3529,8 @@ fn e2e_enterprise_endpoints_plus_partial_model_override() {
         "model's own api_key must beat session token"
     );
     assert_eq!(
-        sampling.base_url, "https://enterprise-proxy.acme.com/v1",
-        "sampling must route to enterprise proxy"
+        sampling.base_url, "https://enterprise-nemapi.acme.com/v1",
+        "sampling must route to enterprise NemApi"
     );
 }
 #[test]
@@ -3525,6 +3540,7 @@ fn e2e_enterprise_endpoints_only_no_model_override() {
             [endpoints]
             cli_chat_proxy_base_url = "https://enterprise-proxy.acme.com/v1"
             xai_api_base_url = "https://enterprise-api.acme.com/v1"
+            nemapi_base_url = "https://enterprise-nemapi.acme.com/v1"
             "#,
         None,
     );
@@ -3532,13 +3548,13 @@ fn e2e_enterprise_endpoints_only_no_model_override() {
         .get(crate::models::default_model())
         .expect("model should exist");
     assert_eq!(
-        model.info.base_url, "https://enterprise-proxy.acme.com/v1",
-        "default model should use enterprise cli_chat_proxy_base_url"
+        model.info.base_url, "https://enterprise-nemapi.acme.com/v1",
+        "default model should use enterprise NemApi endpoint"
     );
     assert_eq!(
         model.api_base_url.as_deref(),
-        Some("https://enterprise-api.acme.com/v1"),
-        "default model should use enterprise xai_api_base_url"
+        Some("https://enterprise-nemapi.acme.com/v1"),
+        "default model should use enterprise NemApi endpoint for API-key auth"
     );
 }
 /// Unset every env var that `EndpointsConfig::default()` reads for endpoints.

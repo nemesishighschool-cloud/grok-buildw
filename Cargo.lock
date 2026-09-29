@@ -11054,6 +11054,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-test"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12bc5db7778a8e08ee255090861e0e7aac55e784300077e7ed293c7be36168b2"
+dependencies = [
+ "futures-core",
+ "tokio",
+ "tokio-stream",
+]
+
+[[package]]
 name = "tokio-tungstenite"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14069,6 +14080,28 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "xai-grok-nemapi-provider"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "eventsource-stream",
+ "futures-util",
+ "indexmap",
+ "mockito",
+ "rand 0.8.5",
+ "reqwest 0.12.24",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-test",
+ "tracing",
+ "xai-grok-models",
+ "xai-grok-sampler",
+ "xai-grok-sampling-types",
 ]
 
 [[package]]

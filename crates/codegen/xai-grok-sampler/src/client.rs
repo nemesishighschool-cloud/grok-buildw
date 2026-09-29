@@ -50,6 +50,95 @@ const DEFAULT_CLIENT_IDENTIFIER: &str = "grok-shell";
 /// Product identifier baked into User-Agent strings.
 const AGENT_PRODUCT: &str = "grok-shell";
 const ANTHROPIC_DEFAULT_MAX_TOKENS: u32 = 128_000;
+const NEMAPI_MODEL_PROVIDERS: &[(&str, &str)] = &[
+    ("deepseek-chat", "deepseek"),
+    ("qwen-chat", "qwen"),
+    ("claude-chat", "claude"),
+    ("gemini-chat", "gemini"),
+    ("gpt-chat", "chatgpt"),
+    ("kimi-chat", "kimi"),
+    ("glm-chat", "zai"),
+];
+
+fn nemapi_provider(model: &str) -> Option<&'static str> {
+    NEMAPI_MODEL_PROVIDERS
+        .iter()
+        .find_map(|(canonical, provider)| (*canonical == model).then_some(*provider))
+}
+
+/// Adapt the normal chat request for NemApi's browser-backed conversation model.
+/// A fresh local conversation sends its system prompt, tools, and first user turn.
+/// Existing local history is display-only; NemApi's selected browser thread receives
+/// only the newest user message on every later turn, including after `/resume`.
+fn prepare_nemapi_request_body(mut body: serde_json::Value) -> Result<serde_json::Value> {
+    let Some(object) = body.as_object_mut() else {
+        return Err(SamplingError::InvalidConfiguration(
+            "NemApi request body must be a JSON object",
+        ));
+    };
+    let model = object
+        .get("model")
+        .and_then(serde_json::Value::as_str)
+        .ok_or(SamplingError::InvalidConfiguration(
+            "NemApi request must include a canonical model",
+        ))?;
+    let provider = nemapi_provider(model).ok_or(SamplingError::InvalidConfiguration(
+        "NemApi request model is not one of the seven canonical models",
+    ))?;
+    let messages = object
+        .get("messages")
+        .and_then(serde_json::Value::as_array)
+        .ok_or(SamplingError::InvalidConfiguration(
+            "NemApi request must include a messages array",
+        ))?;
+    let last_user = messages
+        .iter()
+        .rposition(|message| {
+            message.get("role").and_then(serde_json::Value::as_str) == Some("user")
+        })
+        .ok_or(SamplingError::InvalidConfiguration(
+            "NemApi request must include a user message",
+        ))?;
+    let is_new_conversation = messages.iter().enumerate().all(|(index, message)| {
+        index == last_user
+            || message.get("role").and_then(serde_json::Value::as_str) == Some("system")
+    });
+
+    let selected_messages: Vec<serde_json::Value> = messages
+        .iter()
+        .enumerate()
+        .filter(|(index, message)| {
+            *index == last_user
+                || (is_new_conversation
+                    && message.get("role").and_then(serde_json::Value::as_str) == Some("system"))
+        })
+        .map(|(_, message)| message.clone())
+        .collect();
+
+    if !is_new_conversation {
+        let mut next = serde_json::Map::new();
+        for key in ["model", "stream"] {
+            if let Some(value) = object.get(key) {
+                next.insert(key.to_owned(), value.clone());
+            }
+        }
+        next.insert(
+            "messages".to_owned(),
+            serde_json::Value::Array(selected_messages),
+        );
+        next.insert("provider".to_owned(), serde_json::json!(provider));
+        next.insert("fresh_chat".to_owned(), serde_json::Value::Bool(false));
+        return Ok(serde_json::Value::Object(next));
+    }
+
+    object.insert(
+        "messages".to_owned(),
+        serde_json::Value::Array(selected_messages),
+    );
+    object.insert("provider".to_owned(), serde_json::json!(provider));
+    object.insert("fresh_chat".to_owned(), serde_json::Value::Bool(true));
+    Ok(body)
+}
 
 /// Per-request `x-grok-*` headers. Optional fields are skipped when empty/`None`.
 struct GrokRequestHeaders<'a> {
@@ -340,6 +429,7 @@ impl std::fmt::Debug for SamplingClient {
 #[derive(Clone, Debug, Default)]
 struct ClientDefaults {
     model: String,
+    nemapi_mode: bool,
     max_completion_tokens: Option<u32>,
     temperature: Option<f32>,
     top_p: Option<f32>,
@@ -646,6 +736,7 @@ impl SamplingClient {
         );
 
         let defaults = ClientDefaults {
+            nemapi_mode: nemapi_provider(&config.model).is_some(),
             model: config.model,
             max_completion_tokens: config.max_completion_tokens,
             temperature: config.temperature,
@@ -956,9 +1047,17 @@ impl SamplingClient {
             builder,
             sent_bearer,
         } = self.post(self.endpoint("chat/completions"));
-        let built_request = self
-            .build_json_request(grok_headers.apply(builder), &payload)
-            .await?;
+        let builder = grok_headers.apply(builder);
+        let built_request = if self.defaults.nemapi_mode {
+            let body = serde_json::to_value(&payload).map_err(|e| {
+                tracing::error!("Failed to serialize NemApi request: {}", e);
+                SamplingError::Serialization(e)
+            })?;
+            let body = prepare_nemapi_request_body(body)?;
+            self.build_json_request(builder, &body).await?
+        } else {
+            self.build_json_request(builder, &payload).await?
+        };
         let response = self.send(built_request).await?;
 
         let status = response.status();
@@ -1097,9 +1196,17 @@ impl SamplingClient {
         let http_request = grok_headers
             .apply(builder)
             .header(ACCEPT, HeaderValue::from_static("text/event-stream"));
-        let built_request = self
-            .build_json_request(http_request, &streaming_request)
-            .await?;
+        let built_request = if self.defaults.nemapi_mode {
+            let body = serde_json::to_value(&streaming_request).map_err(|e| {
+                tracing::error!("Failed to serialize NemApi streaming request: {}", e);
+                SamplingError::Serialization(e)
+            })?;
+            let body = prepare_nemapi_request_body(body)?;
+            self.build_json_request(http_request, &body).await?
+        } else {
+            self.build_json_request(http_request, &streaming_request)
+                .await?
+        };
 
         tracing::debug!(
             url = %built_request.url(),
@@ -2284,6 +2391,98 @@ mod tests {
             body.get("tools"),
             Some(&serde_json::json!([{ "type": "function" }]))
         );
+    }
+
+    #[test]
+    fn nemapi_initial_request_keeps_system_prompt_tools_and_current_user_turn() {
+        let body = prepare_nemapi_request_body(serde_json::json!({
+            "model": "gemini-chat",
+            "messages": [
+                {"role": "system", "content": "system prompt"},
+                {"role": "user", "content": "first question"}
+            ],
+            "tools": [{"type": "function", "function": {"name": "edit_file"}}],
+            "temperature": 0.2,
+            "stream": true
+        }))
+        .expect("valid initial request");
+
+        assert_eq!(body["provider"], "gemini");
+        assert_eq!(body["fresh_chat"], true);
+        assert_eq!(
+            body["messages"],
+            serde_json::json!([
+                {"role": "system", "content": "system prompt"},
+                {"role": "user", "content": "first question"}
+            ])
+        );
+        assert_eq!(body["tools"][0]["function"]["name"], "edit_file");
+        assert_eq!(body["temperature"], 0.2);
+    }
+
+    #[test]
+    fn nemapi_follow_up_sends_only_latest_user_prompt_and_keeps_browser_thread() {
+        let body = prepare_nemapi_request_body(serde_json::json!({
+            "model": "deepseek-chat",
+            "messages": [
+                {"role": "system", "content": "local system prompt"},
+                {"role": "user", "content": "earlier question"},
+                {"role": "assistant", "content": "earlier answer"},
+                {"role": "user", "content": "current question"}
+            ],
+            "tools": [{"type": "function", "function": {"name": "edit_file"}}],
+            "temperature": 0.2,
+            "stream": true
+        }))
+        .expect("valid follow-up request");
+
+        assert_eq!(body["provider"], "deepseek");
+        assert_eq!(body["fresh_chat"], false);
+        assert_eq!(
+            body["messages"],
+            serde_json::json!([{"role": "user", "content": "current question"}])
+        );
+        assert!(body.get("tools").is_none());
+        assert!(body.get("temperature").is_none());
+    }
+
+    #[test]
+    fn nemapi_resume_does_not_resend_saved_history() {
+        let body = prepare_nemapi_request_body(serde_json::json!({
+            "model": "gpt-chat",
+            "messages": [
+                {"role": "system", "content": "saved prompt"},
+                {"role": "user", "content": "saved question"},
+                {"role": "assistant", "content": "saved answer"},
+                {"role": "user", "content": "continue this discussion"}
+            ],
+            "tools": [{"type": "function", "function": {"name": "edit_file"}}]
+        }))
+        .expect("valid resumed request");
+
+        assert_eq!(body["provider"], "chatgpt");
+        assert_eq!(body["fresh_chat"], false);
+        assert_eq!(
+            body["messages"],
+            serde_json::json!([{"role": "user", "content": "continue this discussion"}])
+        );
+        assert!(body.get("tools").is_none());
+    }
+
+    #[test]
+    fn nemapi_models_are_limited_to_canonical_names() {
+        for (model, provider) in NEMAPI_MODEL_PROVIDERS {
+            assert_eq!(nemapi_provider(model), Some(*provider));
+        }
+        for alias in [
+            "gemini-2.5-flash",
+            "claude-sonnet",
+            "qwen-plus",
+            "deepseek-coder",
+            "gpt-4",
+        ] {
+            assert_eq!(nemapi_provider(alias), None);
+        }
     }
 
     #[test]

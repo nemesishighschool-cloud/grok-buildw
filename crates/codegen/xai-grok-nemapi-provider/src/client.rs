@@ -15,10 +15,10 @@ use eventsource_stream::Eventsource;
 use futures_util::stream::BoxStream;
 use futures_util::{Stream, StreamExt};
 use indexmap::IndexMap;
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
+use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue};
 use reqwest::{Client, RequestBuilder, Response};
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, trace, warn};
 
@@ -201,7 +201,10 @@ impl NemApiClient {
         );
 
         // Resolve the model to get provider info
-        let model_str = request.model.clone().unwrap_or_else(|| self.config.effective_default_model().to_string());
+        let model_str = request
+            .model
+            .clone()
+            .unwrap_or_else(|| self.config.effective_default_model().to_string());
         let (provider_id, canonical_model) = self.provider.resolve_model(&model_str)?;
         debug!(
             "Resolved model '{}' to provider '{}' with canonical model '{}'",
@@ -211,18 +214,21 @@ impl NemApiClient {
         // Update request model with canonical model
         request.model = Some(canonical_model.clone());
 
-        // Check if this is the first request in the conversation
-        let is_first_request = self.is_first_request().await;
+        // A resumed local transcript is display-only; its saved messages must not
+        // be replayed into NemApi's already-selected browser conversation.
+        let is_first_request =
+            self.is_first_request().await && Self::is_new_conversation_request(&request);
 
         // Build the request body according to NemApi's method:
-        // - First request: sends EVERYTHING (system + all messages + tools + user message) in ONE request
+        // - First request: sends system prompts, tools, and the current user message
         // - Subsequent requests: sends ONLY the latest user message
         // The browser extension maintains the context server-side
-        let body = self.build_nemapi_body(&request, is_first_request, &provider_id, &canonical_model)?;
+        let body =
+            self.build_nemapi_body(&request, is_first_request, &provider_id, &canonical_model)?;
 
         // Send the request
         let response = self
-            .build_request("POST", "/v1/chat/completions")
+            .build_request("POST", "/chat/completions")
             .json(&body)
             .send()
             .await
@@ -233,7 +239,7 @@ impl NemApiClient {
 
         // Mark first request as done (subsequent requests will send only user message)
         // Note: Server maintains context, session history is displayed but NOT sent back
-        if is_first_request {
+        if is_first_request && response.status().is_success() {
             self.mark_first_request_done().await;
         }
 
@@ -246,7 +252,7 @@ impl NemApiClient {
     /// Build request body for NemApi
     ///
     /// NemApi's unique approach:
-    /// - If first request: include system prompt + all messages + tools
+    /// - If first request: include system prompts + current user message + tools
     /// - If not first: include ONLY the latest user message
     fn build_nemapi_body(
         &self,
@@ -259,29 +265,29 @@ impl NemApiClient {
         let latest_user_message = self.extract_latest_user_message(request);
 
         if include_system_and_tools {
-            // FIRST REQUEST: Send system + all messages + tools
+            // FIRST REQUEST: Send the system prompt, current user turn, and tools.
             debug!("Building FIRST request body with system prompt and tools");
 
             let mut messages = Vec::new();
+            let latest_user_index = request
+                .messages
+                .iter()
+                .rposition(|msg| msg.role == "user")
+                .ok_or_else(|| {
+                    NemApiError::Generic("No user message found in request".to_string())
+                })?;
 
-            // Add system message if present
-            for msg in &request.messages {
-                if msg.role == "system" {
+            for (index, msg) in request.messages.iter().enumerate() {
+                if msg.role == "system" || index == latest_user_index {
                     messages.push(json!({
-                        "role": "system",
-                        "content": msg.content.clone()
-                    }));
-                    break; // Only first system message
-                }
-            }
-
-            // Add all messages (this establishes the context)
-            for msg in &request.messages {
-                if msg.role != "system" {
-                    let mut msg_json = json!({
                         "role": msg.role.clone(),
-                        "content": msg.content.clone()
-                    });
+                        "content": msg.content.clone(),
+                    }));
+                    let Some(msg_json) = messages.last_mut() else {
+                        return Err(NemApiError::Generic(
+                            "Failed to build initial NemApi messages".to_string(),
+                        ));
+                    };
 
                     // Add name if present
                     if let Some(name) = &msg.name {
@@ -292,8 +298,6 @@ impl NemApiClient {
                     if let Some(tool_calls) = &msg.tool_calls {
                         msg_json["tool_calls"] = json!(tool_calls);
                     }
-
-                    messages.push(msg_json);
                 }
             }
 
@@ -329,7 +333,7 @@ impl NemApiClient {
             }
 
             // Add NemApi-specific config
-            self.add_nemapi_config(&mut body, provider_id);
+            self.add_nemapi_config(&mut body, provider_id, true);
 
             Ok(body)
         } else {
@@ -349,7 +353,7 @@ impl NemApiClient {
             });
 
             // Add NemApi-specific config
-            self.add_nemapi_config(&mut body, provider_id);
+            self.add_nemapi_config(&mut body, provider_id, false);
 
             Ok(body)
         }
@@ -375,15 +379,29 @@ impl NemApiClient {
         None
     }
 
+    fn is_new_conversation_request(request: &ChatCompletionRequest) -> bool {
+        let mut user_count = 0;
+        request
+            .messages
+            .iter()
+            .all(|message| match message.role.as_str() {
+                "system" => true,
+                "user" => {
+                    user_count += 1;
+                    true
+                }
+                _ => false,
+            })
+            && user_count == 1
+    }
+
     /// Add NemApi-specific configuration to request body
-    fn add_nemapi_config(&self, body: &mut Value, provider_id: &str) {
+    fn add_nemapi_config(&self, body: &mut Value, provider_id: &str, fresh_chat: bool) {
         // Add provider hint
         body["provider"] = json!(provider_id);
 
-        // Add NemApi flags
-        if self.config.fresh_chat {
-            body["fresh_chat"] = json!(true);
-        }
+        // Start a browser conversation only for a new local conversation.
+        body["fresh_chat"] = json!(fresh_chat && self.config.fresh_chat);
 
         if self.config.premium_md {
             body["premium_md"] = json!(true);
@@ -457,7 +475,9 @@ impl NemApiClient {
         trace!("Non-streaming response {}: {}", request_id, body);
 
         // Parse the response using our custom parser
-        let parsed = self.parser.parse_chat_completion_response(&body, provider_id)?;
+        let parsed = self
+            .parser
+            .parse_chat_completion_response(&body, provider_id)?;
 
         Ok(parsed)
     }
@@ -491,25 +511,22 @@ impl NemApiClient {
         );
 
         // Resolve the model
-        let model_str = request.model.clone().unwrap_or_else(|| self.config.effective_default_model().to_string());
+        let model_str = request
+            .model
+            .clone()
+            .unwrap_or_else(|| self.config.effective_default_model().to_string());
         let (provider_id, canonical_model) = self.provider.resolve_model(&model_str)?;
 
-        // Check if this is the first request
-        let is_first = self.is_first_request().await;
+        let is_first = self.is_first_request().await && Self::is_new_conversation_request(&request);
 
         // Build the request body
         let mut req_clone = request.clone();
         req_clone.model = Some(canonical_model.clone());
         let body = self.build_nemapi_body(&req_clone, is_first, &provider_id, &canonical_model)?;
 
-        // Mark first request as done
-        if is_first {
-            self.mark_first_request_done().await;
-        }
-
         // Send the request
         let response = self
-            .build_request("POST", "/v1/chat/completions")
+            .build_request("POST", "/chat/completions")
             .json(&body)
             .header("Accept", "text/event-stream")
             .send()
@@ -525,6 +542,9 @@ impl NemApiClient {
                 status,
                 message: format!("Streaming request failed with status {}", status),
             });
+        }
+        if is_first {
+            self.mark_first_request_done().await;
         }
 
         // Create a stream from the response

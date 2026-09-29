@@ -68,3 +68,29 @@ pub fn default_session_summary_model() -> &'static str {
         .as_deref()
         .unwrap_or(&DEFAULTS.default)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::DEFAULTS;
+
+    #[test]
+    fn nemapi_catalog_contains_only_canonical_model_names() {
+        let names: Vec<&str> = DEFAULTS
+            .models
+            .iter()
+            .map(|model| model.model.as_str())
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "deepseek-chat",
+                "qwen-chat",
+                "claude-chat",
+                "gemini-chat",
+                "gpt-chat",
+                "kimi-chat",
+                "glm-chat",
+            ]
+        );
+    }
+}

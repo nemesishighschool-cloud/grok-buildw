@@ -2,30 +2,9 @@
 # Ce fichier configure Grok Build pour utiliser uniquement NemApi comme fournisseur
 
 [endpoints]
-# Désactive l'API xAI officielle
-xai_api_base_url = "http://127.0.0.1:8090/v1"
-# Active NemApi comme endpoint principal
+# Route default model inference directly to NemApi.
 nemapi_base_url = "http://127.0.0.1:8090/v1"
-cli_chat_proxy_base_url = "http://127.0.0.1:8090/v1"
 
-# Désactive les endpoints xAI
-models_base_url = "http://127.0.0.1:8090/v1"
-models_list_url = "http://127.0.0.1:8090/v1/models"
-feedback_base_url = "http://127.0.0.1:8090/v1"
-
-[model]
+[models]
 # Utilise gemini-chat comme modèle par défaut
 default = "gemini-chat"
-
-# Configuration spécifique NemApi
-[nemapi]
-base_url = "http://127.0.0.1:8090/v1"
-default_provider = "gemini"
-default_model = "gemini-chat"
-stream_enabled = true
-fresh_chat = true
-premium_md = true
-
-# Désactive les autres fournisseurs
-[model_providers]
-disabled = ["xai"]

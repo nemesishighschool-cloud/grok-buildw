@@ -5,11 +5,44 @@
   "session_summary": "gemini-chat",
   "models": [
     {
+      "id": "deepseek-chat",
+      "model": "deepseek-chat",
+      "model_family": "nemapi",
+      "name": "DeepSeek",
+      "description": "DeepSeek via NemApi",
+      "context_window": 128000,
+      "api_backend": "chat",
+      "supports_backend_search": false,
+      "system_prompt_label": "DeepSeek"
+    },
+    {
+      "id": "qwen-chat",
+      "model": "qwen-chat",
+      "model_family": "nemapi",
+      "name": "Qwen",
+      "description": "Qwen via NemApi",
+      "context_window": 128000,
+      "api_backend": "chat",
+      "supports_backend_search": false,
+      "system_prompt_label": "Qwen"
+    },
+    {
+      "id": "claude-chat",
+      "model": "claude-chat",
+      "model_family": "nemapi",
+      "name": "Claude",
+      "description": "Claude via NemApi",
+      "context_window": 200000,
+      "api_backend": "chat",
+      "supports_backend_search": false,
+      "system_prompt_label": "Claude"
+    },
+    {
       "id": "gemini-chat",
       "model": "gemini-chat",
       "model_family": "nemapi",
-      "name": "Gemini (via NemApi)",
-      "description": "Google Gemini via NemApi proxy with browser automation",
+      "name": "Gemini",
+      "description": "Gemini via NemApi",
       "context_window": 128000,
       "api_backend": "chat",
       "supports_backend_search": false,
@@ -29,211 +62,47 @@
         {
           "value": "medium",
           "label": "Medium Effort",
-          "description": "Balanced effort with standard implementation and testing"
+          "description": "Balanced effort with standard reasoning"
         },
         {
           "value": "low",
           "label": "Low Effort",
-          "description": "Quick, fast implementations"
+          "description": "Quick responses"
         }
       ]
     },
     {
-      "id": "gemini-2.5-flash",
-      "model": "gemini-2.5-flash",
+      "id": "gpt-chat",
+      "model": "gpt-chat",
       "model_family": "nemapi",
-      "name": "Gemini 2.5 Flash (via NemApi)",
-      "description": "Google Gemini 2.5 Flash via NemApi proxy",
+      "name": "ChatGPT",
+      "description": "ChatGPT via NemApi",
       "context_window": 128000,
       "api_backend": "chat",
       "supports_backend_search": false,
-      "system_prompt_label": "Gemini 2.5 Flash",
-      "supports_reasoning_effort": true,
-      "reasoning_effort": "high",
-      "auto_compact_threshold_percent": 80,
-      "compaction_at_tokens": true,
-      "compactions_remaining": 1,
-      "reasoning_efforts": [
-        {
-          "value": "high",
-          "label": "High Effort",
-          "description": "Highest implementation quality with extensive reasoning",
-          "default": true
-        },
-        {
-          "value": "medium",
-          "label": "Medium Effort",
-          "description": "Balanced effort with standard implementation and testing"
-        }
-      ]
-    },
-    {
-      "id": "claude-chat",
-      "model": "claude-chat",
-      "model_family": "nemapi",
-      "name": "Claude (via NemApi)",
-      "description": "Anthropic Claude via NemApi proxy with browser automation",
-      "context_window": 200000,
-      "api_backend": "chat",
-      "supports_backend_search": false,
-      "system_prompt_label": "Claude",
-      "supports_reasoning_effort": true,
-      "reasoning_effort": "high",
-      "auto_compact_threshold_percent": 80,
-      "compaction_at_tokens": true,
-      "compactions_remaining": 1,
-      "reasoning_efforts": [
-        {
-          "value": "high",
-          "label": "High Effort",
-          "description": "Highest implementation quality with extensive reasoning",
-          "default": true
-        },
-        {
-          "value": "medium",
-          "label": "Medium Effort",
-          "description": "Balanced effort with standard implementation and testing"
-        }
-      ]
-    },
-    {
-      "id": "claude-sonnet",
-      "model": "claude-sonnet",
-      "model_family": "nemapi",
-      "name": "Claude Sonnet (via NemApi)",
-      "description": "Anthropic Claude Sonnet via NemApi proxy",
-      "context_window": 200000,
-      "api_backend": "chat",
-      "supports_backend_search": false,
-      "system_prompt_label": "Claude Sonnet",
-      "supports_reasoning_effort": true,
-      "reasoning_effort": "high",
-      "auto_compact_threshold_percent": 80,
-      "compaction_at_tokens": true,
-      "compactions_remaining": 1
-    },
-    {
-      "id": "qwen-chat",
-      "model": "qwen-chat",
-      "model_family": "nemapi",
-      "name": "Qwen (via NemApi)",
-      "description": "Alibaba Qwen via NemApi proxy with browser automation",
-      "context_window": 128000,
-      "api_backend": "chat",
-      "supports_backend_search": false,
-      "system_prompt_label": "Qwen",
-      "supports_reasoning_effort": true,
-      "reasoning_effort": "high",
-      "auto_compact_threshold_percent": 80,
-      "compaction_at_tokens": true,
-      "compactions_remaining": 1
-    },
-    {
-      "id": "qwen-plus",
-      "model": "qwen-plus",
-      "model_family": "nemapi",
-      "name": "Qwen Plus (via NemApi)",
-      "description": "Alibaba Qwen Plus via NemApi proxy",
-      "context_window": 128000,
-      "api_backend": "chat",
-      "supports_backend_search": false,
-      "system_prompt_label": "Qwen Plus",
-      "supports_reasoning_effort": true,
-      "reasoning_effort": "high",
-      "auto_compact_threshold_percent": 80,
-      "compaction_at_tokens": true,
-      "compactions_remaining": 1
-    },
-    {
-      "id": "deepseek-chat",
-      "model": "deepseek-chat",
-      "model_family": "nemapi",
-      "name": "DeepSeek (via NemApi)",
-      "description": "DeepSeek via NemApi proxy with browser automation",
-      "context_window": 128000,
-      "api_backend": "chat",
-      "supports_backend_search": false,
-      "system_prompt_label": "DeepSeek",
-      "supports_reasoning_effort": true,
-      "reasoning_effort": "high",
-      "auto_compact_threshold_percent": 80,
-      "compaction_at_tokens": true,
-      "compactions_remaining": 1
-    },
-    {
-      "id": "deepseek-coder",
-      "model": "deepseek-coder",
-      "model_family": "nemapi",
-      "name": "DeepSeek Coder (via NemApi)",
-      "description": "DeepSeek Coder via NemApi proxy",
-      "context_window": 128000,
-      "api_backend": "chat",
-      "supports_backend_search": false,
-      "system_prompt_label": "DeepSeek Coder",
-      "supports_reasoning_effort": true,
-      "reasoning_effort": "high",
-      "auto_compact_threshold_percent": 80,
-      "compaction_at_tokens": true,
-      "compactions_remaining": 1
-    },
-    {
-      "id": "chatgpt",
-      "model": "chatgpt",
-      "model_family": "nemapi",
-      "name": "ChatGPT (via NemApi)",
-      "description": "OpenAI ChatGPT via NemApi proxy with browser automation",
-      "context_window": 128000,
-      "api_backend": "chat",
-      "supports_backend_search": false,
-      "system_prompt_label": "ChatGPT",
-      "supports_reasoning_effort": false,
-      "auto_compact_threshold_percent": 80,
-      "compaction_at_tokens": true,
-      "compactions_remaining": 1
-    },
-    {
-      "id": "gpt-4",
-      "model": "gpt-4",
-      "model_family": "nemapi",
-      "name": "GPT-4 (via NemApi)",
-      "description": "OpenAI GPT-4 via NemApi proxy",
-      "context_window": 128000,
-      "api_backend": "chat",
-      "supports_backend_search": false,
-      "system_prompt_label": "GPT-4",
-      "supports_reasoning_effort": false
+      "system_prompt_label": "ChatGPT"
     },
     {
       "id": "kimi-chat",
       "model": "kimi-chat",
       "model_family": "nemapi",
-      "name": "Kimi (via NemApi)",
-      "description": "Moonshot Kimi via NemApi proxy with browser automation",
+      "name": "Kimi",
+      "description": "Kimi via NemApi",
       "context_window": 128000,
       "api_backend": "chat",
       "supports_backend_search": false,
-      "system_prompt_label": "Kimi",
-      "supports_reasoning_effort": true,
-      "reasoning_effort": "high",
-      "auto_compact_threshold_percent": 80,
-      "compaction_at_tokens": true,
-      "compactions_remaining": 1
+      "system_prompt_label": "Kimi"
     },
     {
       "id": "glm-chat",
       "model": "glm-chat",
       "model_family": "nemapi",
-      "name": "GLM (via NemApi)",
-      "description": "Zhipu GLM via NemApi proxy with browser automation",
+      "name": "GLM",
+      "description": "GLM via NemApi",
       "context_window": 128000,
       "api_backend": "chat",
       "supports_backend_search": false,
-      "system_prompt_label": "GLM",
-      "supports_reasoning_effort": true,
-      "reasoning_effort": "high",
-      "auto_compact_threshold_percent": 80,
-      "compaction_at_tokens": true,
-      "compactions_remaining": 1
+      "system_prompt_label": "GLM"
     }
   ]
 }
